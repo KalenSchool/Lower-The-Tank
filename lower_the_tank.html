@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lower The Tank - Water Mechanics & Equations</title>
+    <!-- Tailwind CSS for UI styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Nunito', sans-serif;
+            user-select: none;
+            background: #111827;
+        }
+        h1, h2, h3, .font-heading {
+            font-family: 'Fredoka', cursive;
+        }
+        
+        /* Custom scrollbars */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3b82f6;
+            border-radius: 4px;
+        }
+
+        /* Pulse glow animations */
+        @keyframes subtle-glow {
+            0%, 100% { filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.5)); }
+            50% { filter: drop-shadow(0 0 15px rgba(59, 130, 246, 0.8)); }
+        }
+
+        /* Water flow animations */
+        @keyframes flow {
+            0% { stroke-dashoffset: 40; }
+            100% { stroke-dashoffset: 0; }
+        }
+
+        /* Wood texture pattern styling */
+        .wood-btn {
+            background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+            box-shadow: 0 4px 0 #78350f, 0 8px 15px rgba(0,0,0,0.3);
+            transition: all 0.1s ease;
+        }
+        .wood-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 0 #78350f, 0 10px 20px rgba(0,0,0,0.4);
+        }
+        .wood-btn:active {
+            transform: translateY(2px);
+            box-shadow: 0 2px 0 #78350f, 0 4px 10px rgba(0,0,0,0.3);
+        }
+
+        .weight-chip {
+            transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+        }
+        .weight-chip:hover {
+            transform: scale(1.05) translateY(-2px);
+        }
+    </style>
+</head>
+<body class="min-h-screen text-slate-100 flex flex-col justify-between overflow-x-hidden bg-slate-900">
+
+    <!-- TOP BAR / HEADER -->
+    <header class="bg-slate-800/90 backdrop-blur-md border-b border-slate-700 px-4 py-3 sticky top-0 z-30 shadow-lg">
+        <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="p-2.5 bg-blue-600/30 border border-blue-400/30 rounded-2xl text-blue-400 text-2xl flex items-center justify-center">
+                    <i class="fa-solid fa-faucet-drip"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl sm:text-2xl font-bold tracking-wide text-white leading-tight">Lower The Tank</h1>
+                    <p class="text-xs text-blue-300 font-medium">Lower the tank to connect to the pipe and move the water!</p>
+                </div>
+            </div>
+
+            <!-- Level Selector & Stats -->
+            <div class="flex items-center gap-2 sm:gap-4">
+                <div class="bg-slate-900/80 border border-slate-700 rounded-xl px-3 py-1.5 flex items-center gap-2">
+                    <span class="text-xs text-slate-400 font-semibold uppercase tracking-wider">Level</span>
+                    <span id="level-display" class="text-lg font-bold text-amber-400 font-heading">1 / 6</span>
+                </div>
+                <button id="btn-reset" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-semibold rounded-xl border border-slate-600 transition duration-150 flex items-center gap-1.5">
+                    <i class="fa-solid fa-rotate-left"></i> Clear
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN GAME WORKSPACE -->
+    <main class="max-w-6xl w-full mx-auto p-3 sm:p-6 flex-1 flex flex-col justify-center items-center">
+        
+        <!-- LEVEL INSTRUCTION BANNER -->
+        <div id="hint-banner" class="w-full bg-slate-800/80 border border-blue-500/30 rounded-2xl p-4 mb-4 text-center shadow-md relative overflow-hidden backdrop-blur-sm">
+            <div class="absolute -top-10 -left-10 w-28 h-28 bg-blue-500/10 rounded-full blur-xl pointer-events-none"></div>
+            <h2 id="level-title" class="text-lg sm:text-xl font-bold text-blue-300 mb-1">Level 1: Target Depth</h2>
+            <p id="level-instruction" class="text-sm sm:text-base text-slate-300 max-w-2xl mx-auto">
+                Add weights to the left and right platforms to lower the tank down to the water pipe opening.
+            </p>
+        </div>
+
+        <!-- CANVAS GAME STAGE -->
+        <div class="relative w-full max-w-4xl bg-slate-950/80 border-2 border-slate-800 rounded-3xl shadow-2xl overflow-hidden backdrop-blur-md flex flex-col items-center justify-center p-2">
+            
+            <!-- Canvas Object for Physics Simulation -->
+            <canvas id="gameCanvas" width="800" height="420" class="w-full h-auto rounded-2xl max-h-[460px] cursor-crosshair"></canvas>
+
+            <!-- On-Canvas Feedback Overlay (Only shown on spill tipping or level win) -->
+            <div id="status-overlay" class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex flex-col items-center justify-center transition-opacity duration-300 opacity-0 pointer-events-none z-20">
+                <div id="status-card" class="bg-slate-800 border-2 border-slate-600 rounded-3xl p-6 sm:p-8 max-w-sm w-11/12 text-center shadow-2xl transform scale-90 transition-transform duration-300">
+                    <div id="status-icon" class="text-5xl mb-3 text-amber-400">
+                        <i class="fa-solid fa-glass-water-droplet"></i>
+                    </div>
+                    <h3 id="status-title" class="text-2xl font-bold text-white mb-2">Water Spilled!</h3>
+                    <p id="status-desc" class="text-sm text-slate-300 mb-5">
+                        The tank tipped over and spilled the water! Try a different combination of weights.
+                    </p>
+                    <div id="status-code-box" class="hidden mb-5 p-3 bg-slate-900 border border-emerald-500/50 rounded-xl">
+                        <span class="text-xs text-slate-400 uppercase tracking-wider block mb-1">Passcode</span>
+                        <span class="text-2xl font-mono font-bold text-emerald-400 tracking-widest">0941</span>
+                    </div>
+                    <button id="status-btn" class="w-full wood-btn text-amber-100 font-bold py-3 px-6 rounded-2xl text-lg font-heading tracking-wide">
+                        Try Again
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SELECTION PANELS FOR WEIGHTS -->
+        <div class="w-full max-w-4xl mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            
+            <!-- LEFT TANK WEIGHT SELECTOR -->
+            <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 flex flex-col justify-between shadow-lg relative">
+                <div class="flex items-center justify-between border-b border-slate-700 pb-2 mb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-blue-400"></span>
+                        <h3 class="font-bold text-slate-200">Left Side Weights (Select up to 2)</h3>
+                    </div>
+                    <span id="left-total-display" class="text-xs font-mono font-bold bg-slate-900 text-blue-400 px-2.5 py-1 rounded-lg border border-slate-700">
+                        Selected: None
+                    </span>
+                </div>
+                
+                <div id="left-weights-container" class="flex flex-wrap gap-2.5 min-h-[56px] items-center">
+                    <!-- Dynamic weight buttons injected here -->
+                </div>
+            </div>
+
+            <!-- RIGHT TANK WEIGHT SELECTOR -->
+            <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 flex flex-col justify-between shadow-lg relative">
+                <div class="flex items-center justify-between border-b border-slate-700 pb-2 mb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-emerald-400"></span>
+                        <h3 class="font-bold text-slate-200">Right Side Weights (Select up to 2)</h3>
+                    </div>
+                    <span id="right-total-display" class="text-xs font-mono font-bold bg-slate-900 text-emerald-400 px-2.5 py-1 rounded-lg border border-slate-700">
+                        Selected: None
+                    </span>
+                </div>
+
+                <div id="right-weights-container" class="flex flex-wrap gap-2.5 min-h-[56px] items-center">
+                    <!-- Dynamic weight buttons injected here -->
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ACTION CONTROL BAR -->
+        <div class="w-full max-w-4xl mt-4 bg-slate-800/90 border border-slate-700/80 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 shadow-xl">
+            <div class="flex items-center gap-3">
+                <div class="p-3 bg-amber-500/20 border border-amber-500/40 rounded-xl text-amber-400 text-xl">
+                    <i class="fa-solid fa-calculator"></i>
+                </div>
+                <div>
+                    <span class="text-xs text-slate-400 uppercase tracking-wider font-semibold block">Combined Total Added Weight</span>
+                    <span id="combined-sum-display" class="text-xl sm:text-2xl font-bold text-amber-400 font-heading">0 kg</span>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <button id="btn-drop-weights" disabled class="px-6 py-3 bg-slate-700 text-slate-400 font-bold rounded-2xl text-lg font-heading tracking-wide transition-all duration-200 flex items-center gap-2 cursor-not-allowed">
+                    <i class="fa-solid fa-arrow-down-long"></i> Lower Tank
+                </button>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- FOOTER / EDUCATIONAL REFLECTION -->
+    <footer class="bg-slate-950/80 border-t border-slate-800 py-3 px-4 text-center text-xs text-slate-400 mt-4">
+        <p>Interactive Physics & Water Mechanics Lab • Experiment with different weight combinations to lower the tank!</p>
+    </footer>
+
+    <!-- GAME LOGIC SCRIPT -->
+    <script>
+        // --- SOUND EFFECTS SYNTHESIZER (Web Audio API) ---
+        class SoundFX {
+            constructor() {
+                this.ctx = null;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+
+            playSelect() {
+                this.init();
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(400, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(800, this.ctx.currentTime + 0.08);
+                gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.08);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.08);
+            }
+
+            playDrop() {
+                this.init();
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(180, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(60, this.ctx.currentTime + 0.25);
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.25);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.25);
+            }
+
+            playSuccess() {
+                this.init();
+                if (!this.ctx) return;
+                const notes = [392, 523.25, 659.25, 783.99]; // G4, C5, E5, G5
+                notes.forEach((freq, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime + idx * 0.1);
+                    gain.gain.setValueAtTime(0.2, this.ctx.currentTime + idx * 0.1);
+                    gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + idx * 0.1 + 0.3);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(this.ctx.currentTime + idx * 0.1);
+                    osc.stop(this.ctx.currentTime + idx * 0.1 + 0.3);
+                });
+            }
+
+            playFail() {
+                this.init();
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(220, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.4);
+                gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.4);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.4);
+            }
+
+            playSplash() {
+                this.init();
+                if (!this.ctx) return;
+                const bufferSize = this.ctx.sampleRate * 0.3;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(800, this.ctx.currentTime);
+                filter.frequency.linearRampToValueAtTime(200, this.ctx.currentTime + 0.3);
+                
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                noise.start();
+            }
+        }
+
+        const audio = new SoundFX();
+
+        // Helper function: Array shuffling (Fisher-Yates)
+        function shuffleArray(arr) {
+            const shuffled = [...arr];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            return shuffled;
+        }
+
+        // --- LEVEL DEFINITIONS ---
+        // Formula: Target Pipe Y = 110 + (Total System Weight In Kg) * 25
+        const LEVELS = [
+            {
+                id: 1,
+                title: "Level 1: Target Depth",
+                instruction: "Add weights to the left and right platforms to lower the tank down to the water pipe opening.",
+                targetPipeY: 210, // 4kg total added weight required (110 + 4*25 = 210)
+                initialLeftKg: 0,
+                initialRightKg: 0,
+                leftWeights: [1, 2, 3, 4, 5, 6],
+                rightWeights: [1, 2, 3, 4, 5, 6],
+                mysteryX: null
+            },
+            {
+                id: 2,
+                title: "Level 2: Reaching Deeper",
+                instruction: "The pipe opening is lower down! Choose weight combinations to reach the pipe.",
+                targetPipeY: 260, // 6kg total added weight required (110 + 6*25 = 260)
+                initialLeftKg: 0,
+                initialRightKg: 0,
+                leftWeights: [1, 2, 3, 4, 5, 6, 7],
+                rightWeights: [1, 2, 3, 4, 5, 6, 7],
+                mysteryX: null
+            },
+            {
+                id: 3,
+                title: "Level 3: Pre-loaded Container",
+                instruction: "The left side already has a 2kg weight attached! Adjust weights to lower the tank to the pipe.",
+                targetPipeY: 310, // Pre-loaded 2kg left. Total target weight = 8kg -> Total added = 6kg (+3kg left, +3kg right).
+                initialLeftKg: 2,
+                initialRightKg: 0,
+                leftWeights: [1, 2, 3, 4, 5],
+                rightWeights: [1, 2, 3, 4, 5, 6],
+                mysteryX: null
+            },
+            {
+                id: 4,
+                title: "Level 4: The Mystery Crate",
+                instruction: "There is a crate marked 'X' attached to the left! Experiment with weights to connect to the pipe.",
+                targetPipeY: 310, // Mystery X = 3kg on left. Target depth = 310 (8kg total). Total added needed = 5kg (+1kg left, +4kg right).
+                initialLeftKg: 0,
+                initialRightKg: 0,
+                leftWeights: [1, 2, 3, 4, 5], 
+                rightWeights: [1, 2, 3, 4, 5, 6],
+                mysteryX: { side: 'left', value: 3, label: 'X' }
+            },
+            {
+                id: 5,
+                title: "Level 5: Dual Platform Setup",
+                instruction: "The pipe sits deep below! Test different weight combinations on both sides.",
+                targetPipeY: 335, // Initial Left: 1kg, Initial Right: 3kg. Target weight = 9kg. Total added = 5kg (+3kg left, +2kg right).
+                initialLeftKg: 1,
+                initialRightKg: 3,
+                leftWeights: [1, 2, 3, 4, 5, 6],
+                rightWeights: [1, 2, 3, 4, 5, 6],
+                mysteryX: null
+            },
+            {
+                id: 6,
+                title: "Level 6: Crate Y Challenge",
+                instruction: "A crate labeled 'Y' sits on the right side! Connect the tank outflow to the receiving pipe.",
+                targetPipeY: 360, // Mystery Y = 2kg right, Initial Left = 2kg. Target weight = 10kg. Total added = 6kg (+3kg left, +3kg right).
+                initialLeftKg: 2,
+                initialRightKg: 0,
+                leftWeights: [1, 2, 3, 4, 5, 6, 7],
+                rightWeights: [1, 2, 3, 4, 5, 6, 7],
+                mysteryX: { side: 'right', value: 2, label: 'Y' }
+            }
+        ];
+
+        // --- GAME STATE ---
+        let currentLevelIdx = 0;
+        
+        let randomizedLeftWeights = [];
+        let randomizedRightWeights = [];
+
+        // Up to two selections per side
+        let selectedLeftWeights = [];
+        let selectedRightWeights = [];
+        let weightsDropped = false;
+
+        let isSpilled = false;
+        let isSuccess = false;
+
+        // Physics/Render Parameters
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Physics State variables
+        let tankY = 110;           // Base Y position of tank center
+        let targetTankY = 110;     // Target Y position based on total weight
+        let tiltAngle = 0;         // Current angle in radians
+        let targetTiltAngle = 0;   // Target tilt angle
+        let waterLevel = 0.85;     // 0 to 1 percentage of water in tank
+        let pipeWaterFlow = 0;     // Water flowing into pipe (0 to 1)
+        let particles = [];        // Splash/water particles
+
+        // --- DOM ELEMENTS ---
+        const levelDisplay = document.getElementById('level-display');
+        const levelTitle = document.getElementById('level-title');
+        const levelInstruction = document.getElementById('level-instruction');
+        const leftWeightsContainer = document.getElementById('left-weights-container');
+        const rightWeightsContainer = document.getElementById('right-weights-container');
+        const leftTotalDisplay = document.getElementById('left-total-display');
+        const rightTotalDisplay = document.getElementById('right-total-display');
+        const combinedSumDisplay = document.getElementById('combined-sum-display');
+        const btnDropWeights = document.getElementById('btn-drop-weights');
+        const btnReset = document.getElementById('btn-reset');
+        
+        const statusOverlay = document.getElementById('status-overlay');
+        const statusCard = document.getElementById('status-card');
+        const statusIcon = document.getElementById('status-icon');
+        const statusTitle = document.getElementById('status-title');
+        const statusDesc = document.getElementById('status-desc');
+        const statusCodeBox = document.getElementById('status-code-box');
+        const statusBtn = document.getElementById('status-btn');
+
+        // --- GAME CONTROL FUNCTIONS ---
+        function loadLevel(idx) {
+            currentLevelIdx = idx;
+            const lvl = LEVELS[currentLevelIdx];
+
+            levelDisplay.textContent = `${lvl.id} / ${LEVELS.length}`;
+            levelTitle.textContent = lvl.title;
+            levelInstruction.textContent = lvl.instruction;
+
+            // Randomize weight order on level load
+            randomizedLeftWeights = shuffleArray(lvl.leftWeights);
+            randomizedRightWeights = shuffleArray(lvl.rightWeights);
+
+            resetLevelState();
+        }
+
+        function resetLevelState() {
+            selectedLeftWeights = [];
+            selectedRightWeights = [];
+            weightsDropped = false;
+            isSpilled = false;
+            isSuccess = false;
+
+            tankY = 110;
+            targetTankY = 110;
+            tiltAngle = 0;
+            targetTiltAngle = 0;
+            waterLevel = 0.85;
+            pipeWaterFlow = 0;
+            particles = [];
+
+            hideStatusOverlay();
+            renderWeightSelectors();
+            updateTotalDisplays();
+        }
+
+        function renderWeightSelectors() {
+            leftWeightsContainer.innerHTML = '';
+            rightWeightsContainer.innerHTML = '';
+
+            randomizedLeftWeights.forEach((val, idx) => {
+                const isSel = selectedLeftWeights.includes(idx);
+                const btn = createWeightButton(val, idx, 'left', isSel);
+                leftWeightsContainer.appendChild(btn);
+            });
+
+            randomizedRightWeights.forEach((val, idx) => {
+                const isSel = selectedRightWeights.includes(idx);
+                const btn = createWeightButton(val, idx, 'right', isSel);
+                rightWeightsContainer.appendChild(btn);
+            });
+        }
+
+        function updatePhysicsTargets() {
+            const lvl = LEVELS[currentLevelIdx];
+            
+            const addedLeftSum = selectedLeftWeights.reduce((sum, idx) => sum + randomizedLeftWeights[idx], 0);
+            const addedRightSum = selectedRightWeights.reduce((sum, idx) => sum + randomizedRightWeights[idx], 0);
+
+            let totalLeft = lvl.initialLeftKg + addedLeftSum;
+            let totalRight = lvl.initialRightKg + addedRightSum;
+
+            if (lvl.mysteryX) {
+                if (lvl.mysteryX.side === 'left') totalLeft += lvl.mysteryX.value;
+                if (lvl.mysteryX.side === 'right') totalRight += lvl.mysteryX.value;
+            }
+
+            const totalSystemKg = totalLeft + totalRight;
+            const weightDiff = totalRight - totalLeft;
+
+            if (weightsDropped) {
+                targetTankY = 110 + (totalSystemKg * 25);
+                targetTiltAngle = weightDiff * 0.08;
+                audio.playDrop();
+            } else {
+                targetTankY = 110;
+                targetTiltAngle = 0;
+            }
+        }
+
+        function createWeightButton(val, itemIdx, side, isSelected) {
+            const btn = document.createElement('button');
+            const isDisabled = isSpilled || isSuccess;
+            btn.className = `weight-chip px-4 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 border transition-all ${
+                isSelected 
+                    ? (side === 'left' ? 'bg-blue-600 text-white border-blue-300 ring-2 ring-blue-400' : 'bg-emerald-600 text-white border-emerald-300 ring-2 ring-emerald-400')
+                    : 'bg-slate-700 hover:bg-slate-650 text-slate-200 border-slate-600'
+            } ${isDisabled ? 'opacity-60 cursor-not-allowed' : ''}`;
+
+            btn.innerHTML = `<i class="fa-solid fa-weight-hanging text-xs"></i> +${val}kg`;
+            btn.addEventListener('click', () => {
+                if (isDisabled) return;
+                audio.playSelect();
+
+                // If tank was dropped previously, reset drop state so player can adjust selection seamlessly
+                if (weightsDropped) {
+                    weightsDropped = false;
+                }
+                
+                const targetArr = side === 'left' ? selectedLeftWeights : selectedRightWeights;
+                const existingIdx = targetArr.indexOf(itemIdx);
+
+                if (existingIdx !== -1) {
+                    targetArr.splice(existingIdx, 1);
+                } else {
+                    if (targetArr.length < 2) {
+                        targetArr.push(itemIdx);
+                    }
+                }
+                
+                updatePhysicsTargets();
+                renderWeightSelectors();
+                updateTotalDisplays();
+            });
+            return btn;
+        }
+
+        function updateTotalDisplays() {
+            const addedLeftSum = selectedLeftWeights.reduce((sum, idx) => sum + randomizedLeftWeights[idx], 0);
+            const addedRightSum = selectedRightWeights.reduce((sum, idx) => sum + randomizedRightWeights[idx], 0);
+            const combinedSum = addedLeftSum + addedRightSum;
+
+            leftTotalDisplay.textContent = selectedLeftWeights.length > 0 ? `Selected: +${addedLeftSum}kg` : 'Selected: None';
+            rightTotalDisplay.textContent = selectedRightWeights.length > 0 ? `Selected: +${addedRightSum}kg` : 'Selected: None';
+            combinedSumDisplay.textContent = `${combinedSum} kg`;
+
+            // Enable Drop button if at least one weight is selected on both sides and tank isn't dropped/ended
+            if (selectedLeftWeights.length > 0 && selectedRightWeights.length > 0 && !weightsDropped && !isSpilled && !isSuccess) {
+                btnDropWeights.disabled = false;
+                btnDropWeights.className = "px-6 py-3 wood-btn text-amber-100 font-bold rounded-2xl text-lg font-heading tracking-wide transition-all duration-200 flex items-center gap-2 cursor-pointer";
+            } else {
+                btnDropWeights.disabled = true;
+                btnDropWeights.className = "px-6 py-3 bg-slate-700 text-slate-400 font-bold rounded-2xl text-lg font-heading tracking-wide transition-all duration-200 flex items-center gap-2 cursor-not-allowed";
+            }
+        }
+
+        function handleDropWeights() {
+            if (selectedLeftWeights.length === 0 || selectedRightWeights.length === 0 || weightsDropped) return;
+
+            weightsDropped = true;
+            btnDropWeights.disabled = true;
+            btnDropWeights.className = "px-6 py-3 bg-slate-700 text-slate-400 font-bold rounded-2xl text-lg font-heading tracking-wide transition-all duration-200 flex items-center gap-2 cursor-not-allowed";
+
+            renderWeightSelectors();
+            updatePhysicsTargets();
+            updateTotalDisplays();
+        }
+
+        // --- DRAW TANK MECHANISM ---
+        function drawTankMechanism() {
+            const lvl = LEVELS[currentLevelIdx];
+            const centerX = 400;
+            const currentY = tankY;
+
+            ctx.save();
+            ctx.translate(centerX, currentY);
+            ctx.rotate(tiltAngle);
+
+            // Main Platform Beam Frame
+            ctx.fillStyle = '#78350f';
+            ctx.strokeStyle = '#451a03';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.roundRect(-240, -10, 480, 20, 6);
+            ctx.fill();
+            ctx.stroke();
+
+            // Center Pivot Mount
+            ctx.fillStyle = '#f59e0b';
+            ctx.beginPath();
+            ctx.arc(0, 0, 10, 0, Math.PI * 2);
+            ctx.fill();
+
+            // --- LEFT SCALE PLATFORM & WEIGHTS ---
+            const leftX = -210;
+            ctx.strokeStyle = '#94a3b8';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(leftX, 0);
+            ctx.lineTo(leftX - 25, 60);
+            ctx.moveTo(leftX, 0);
+            ctx.lineTo(leftX + 25, 60);
+            ctx.stroke();
+
+            // Left Tray
+            ctx.fillStyle = '#334155';
+            ctx.strokeStyle = '#64748b';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.roundRect(leftX - 45, 60, 90, 12, 4);
+            ctx.fill();
+            ctx.stroke();
+
+            // Stack Left Weights
+            let leftStackY = 60;
+            if (lvl.initialLeftKg > 0) {
+                leftStackY -= 22;
+                drawWeightBox(leftX, leftStackY, lvl.initialLeftKg, '#64748b', `${lvl.initialLeftKg}kg`);
+            }
+            if (lvl.mysteryX && lvl.mysteryX.side === 'left') {
+                leftStackY -= 26;
+                drawWeightBox(leftX, leftStackY, '?', '#8b5cf6', 'X', true);
+            }
+            selectedLeftWeights.forEach(itemIdx => {
+                const wVal = randomizedLeftWeights[itemIdx];
+                leftStackY -= 24;
+                drawWeightBox(leftX, leftStackY, wVal, '#3b82f6', `+${wVal}kg`);
+            });
+
+            // --- RIGHT SCALE PLATFORM & WEIGHTS ---
+            const rightX = 210;
+            ctx.strokeStyle = '#94a3b8';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(rightX, 0);
+            ctx.lineTo(rightX - 25, 60);
+            ctx.moveTo(rightX, 0);
+            ctx.lineTo(rightX + 25, 60);
+            ctx.stroke();
+
+            // Right Tray
+            ctx.fillStyle = '#334155';
+            ctx.strokeStyle = '#64748b';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.roundRect(rightX - 45, 60, 90, 12, 4);
+            ctx.fill();
+            ctx.stroke();
+
+            // Stack Right Weights
+            let rightStackY = 60;
+            if (lvl.initialRightKg > 0) {
+                rightStackY -= 22;
+                drawWeightBox(rightX, rightStackY, lvl.initialRightKg, '#64748b', `${lvl.initialRightKg}kg`);
+            }
+            if (lvl.mysteryX && lvl.mysteryX.side === 'right') {
+                rightStackY -= 26;
+                drawWeightBox(rightX, rightStackY, '?', '#8b5cf6', lvl.mysteryX.label || 'Y', true);
+            }
+            selectedRightWeights.forEach(itemIdx => {
+                const wVal = randomizedRightWeights[itemIdx];
+                rightStackY -= 24;
+                drawWeightBox(rightX, rightStackY, wVal, '#10b981', `+${wVal}kg`);
+            });
+
+            // --- CENTRAL WATER TANK ---
+            const tankWidth = 140;
+            const tankHeight = 100;
+            const tankX = -tankWidth / 2;
+            const tankYPos = -tankHeight / 2;
+
+            // Tank Body Background & Water Filling
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(tankX, tankYPos, tankWidth, tankHeight);
+
+            if (waterLevel > 0) {
+                const currentWaterH = (tankHeight - 8) * waterLevel;
+                const waterY = tankYPos + tankHeight - 4 - currentWaterH;
+                const waterGrad = ctx.createLinearGradient(0, waterY, 0, waterY + currentWaterH);
+                waterGrad.addColorStop(0, '#38bdf8');
+                waterGrad.addColorStop(1, '#0284c7');
+                
+                ctx.fillStyle = waterGrad;
+                ctx.fillRect(tankX + 4, waterY, tankWidth - 8, currentWaterH);
+            }
+
+            // Glass Tank Front Outline
+            ctx.strokeStyle = '#cbd5e1';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.roundRect(tankX, tankYPos, tankWidth, tankHeight, 10);
+            ctx.stroke();
+
+            // Glass sheen reflection line
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(tankX + 15, tankYPos + 10);
+            ctx.lineTo(tankX + 15, tankYPos + tankHeight - 15);
+            ctx.stroke();
+
+            // Outflow Nozzle on the Right Side of Tank (Aligned at tankYPos + 15 to +31)
+            ctx.fillStyle = '#64748b';
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.rect(tankX + tankWidth, tankYPos + 15, 25, 16);
+            ctx.fill();
+            ctx.stroke();
+
+            // Valve Wheel
+            ctx.fillStyle = '#ef4444';
+            ctx.beginPath();
+            ctx.arc(tankX + tankWidth + 12, tankYPos + 8, 6, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+
+            // Cables connecting Beam to Top Pulleys
+            ctx.strokeStyle = '#cbd5e1';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(180, 28);
+            ctx.lineTo(centerX - 210 * Math.cos(tiltAngle), currentY - 210 * Math.sin(tiltAngle));
+            ctx.moveTo(620, 28);
+            ctx.lineTo(centerX + 210 * Math.cos(tiltAngle), currentY + 210 * Math.sin(tiltAngle));
+            ctx.stroke();
+        }
+
+        function drawPulley(x, y) {
+            ctx.fillStyle = '#64748b';
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(x, y, 16, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = '#0f172a';
+            ctx.beginPath();
+            ctx.arc(x, y, 5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawWeightBox(x, y, weightVal, color, label, isMystery = false) {
+            const w = 42;
+            const h = 22;
+            const boxX = x - w / 2;
+            const boxY = y - h;
+
+            ctx.fillStyle = color;
+            ctx.strokeStyle = '#0f172a';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.roundRect(boxX, boxY, w, h, 5);
+            ctx.fill();
+            ctx.stroke();
+
+            // Label text
+            ctx.fillStyle = '#ffffff';
+            ctx.font = isMystery ? 'bold 14px Fredoka' : 'bold 11px Nunito';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, x, boxY + h / 2);
+        }
+
+        // --- PARTICLE EFFECTS ---
+        function generateWaterSplashParticles() {
+            for (let i = 0; i < 25; i++) {
+                particles.push({
+                    x: 400 + (tiltAngle > 0 ? 90 : -90) + (Math.random() * 30 - 15),
+                    y: tankY + 60,
+                    vx: (tiltAngle > 0 ? 1 : -1) * (Math.random() * 6 + 2),
+                    vy: Math.random() * -4 - 1,
+                    size: Math.random() * 6 + 3,
+                    color: '#38bdf8',
+                    life: 1.0
+                });
+            }
+        }
+
+        function generatePipeParticles() {
+            for (let i = 0; i < 2; i++) {
+                particles.push({
+                    x: 505 + Math.random() * 20,
+                    y: LEVELS[currentLevelIdx].targetPipeY - 35 + Math.random() * 10,
+                    vx: Math.random() * 3 + 3,
+                    vy: Math.random() * 1 - 0.5,
+                    size: Math.random() * 4 + 2,
+                    color: '#7dd3fc',
+                    life: 1.0
+                });
+            }
+        }
+
+        function updateAndDrawParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.2; // Gravity
+                p.life -= 0.03;
+
+                if (p.life <= 0 || p.y > 370) {
+                    particles.splice(i, 1);
+                    continue;
+                }
+
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = Math.max(0, p.life);
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        // --- OVERLAY / DIALOG SYSTEM ---
+        function showStatusOverlay(isWin, message) {
+            statusOverlay.classList.remove('pointer-events-none', 'opacity-0');
+            statusOverlay.classList.add('opacity-100');
+            statusCard.classList.remove('scale-90');
+            statusCard.classList.add('scale-100');
+
+            // Hide passcode box by default
+            if (statusCodeBox) statusCodeBox.classList.add('hidden');
+            // Show status button by default
+            if (statusBtn) statusBtn.classList.remove('hidden');
+
+            if (isWin) {
+                // Special Victory Screen for Level 3 (End of game)
+                if (currentLevelIdx === 2) { // Level 3 (0-indexed = 2)
+                    statusIcon.innerHTML = '<i class="fa-solid fa-trophy text-amber-400"></i>';
+                    statusTitle.textContent = "Success! Tank Lowered!";
+                    statusTitle.className = "text-2xl font-bold text-emerald-400 mb-2 font-heading";
+                    statusDesc.textContent = "Great job! Please enter the code below into your worksheet:";
+                    if (statusCodeBox) statusCodeBox.classList.remove('hidden');
+                    // Hide the action button entirely so this serves as the final end screen
+                    if (statusBtn) statusBtn.classList.add('hidden');
+                } else {
+                    statusIcon.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-400"></i>';
+                    statusTitle.textContent = "Water Flowing!";
+                    statusTitle.className = "text-2xl font-bold text-emerald-400 mb-2 font-heading";
+                    statusDesc.textContent = message;
+                    statusBtn.textContent = currentLevelIdx < LEVELS.length - 1 ? "Next Level" : "Play Again";
+                    statusBtn.dataset.action = "next";
+                }
+            } else {
+                statusIcon.innerHTML = '<i class="fa-solid fa-glass-water-droplet text-amber-400"></i>';
+                statusTitle.textContent = "Water Spilled!";
+                statusTitle.className = "text-2xl font-bold text-amber-400 mb-2 font-heading";
+                statusDesc.textContent = message;
+                statusBtn.textContent = "Try Again";
+                statusBtn.dataset.action = "retry";
+            }
+        }
+
+        function hideStatusOverlay() {
+            statusOverlay.classList.add('pointer-events-none', 'opacity-0');
+            statusOverlay.classList.remove('opacity-100');
+            statusCard.classList.remove('scale-100');
+            statusCard.classList.add('scale-90');
+        }
+
+        function handleStatusButtonClick() {
+            audio.playSelect();
+            const action = statusBtn.dataset.action;
+            if (action === "next") {
+                if (currentLevelIdx < LEVELS.length - 1) {
+                    currentLevelIdx++;
+                } else {
+                    currentLevelIdx = 0; // Loop back
+                }
+                loadLevel(currentLevelIdx);
+            } else {
+                resetLevelState();
+            }
+        }
+
+        // Start App on DOM Ready
+        function initGame() {
+            // Setup DOM Event Listeners
+            btnDropWeights.addEventListener('click', handleDropWeights);
+            btnReset.addEventListener('click', () => {
+                audio.playSelect();
+                resetLevelState();
+            });
+            statusBtn.addEventListener('click', handleStatusButtonClick);
+
+            // Load Level 1
+            loadLevel(0);
+
+            // Start Main Canvas Animation Loop
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- MAIN CANVAS GAME LOOP ---
+        function gameLoop() {
+            // Smoothly lerp physical values toward targets
+            tankY += (targetTankY - tankY) * 0.1;
+            tiltAngle += (targetTiltAngle - tiltAngle) * 0.1;
+
+            // Clear Canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Background Lab Grid / Frame Details
+            ctx.strokeStyle = 'rgba(51, 65, 85, 0.3)';
+            ctx.lineWidth = 1;
+            for (let x = 0; x < canvas.width; x += 40) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y < canvas.height; y += 40) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+
+            // Draw Top Support Gantry & Pulleys
+            ctx.fillStyle = '#334155';
+            ctx.fillRect(100, 15, 600, 12);
+            drawPulley(180, 28);
+            drawPulley(620, 28);
+
+            // Draw Target Receiving Pipe Socket
+            const lvl = LEVELS[currentLevelIdx];
+            const idealPipeY = lvl.targetPipeY; // Height center
+
+            // Pipe Opening Mouth alignment (Nozzle top is tankY - 35, height 16)
+            const pipeMouthY = idealPipeY - 35;
+
+            // Target Pipe Outer Structure
+            ctx.fillStyle = '#1e293b';
+            ctx.strokeStyle = '#475569';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.rect(530, pipeMouthY, 270, 16);
+            ctx.fill();
+            ctx.stroke();
+
+            // Target Pipe Funnel Mouth
+            ctx.fillStyle = '#334155';
+            ctx.beginPath();
+            ctx.moveTo(530, pipeMouthY - 5);
+            ctx.lineTo(495, pipeMouthY - 5);
+            ctx.lineTo(495, pipeMouthY + 21);
+            ctx.lineTo(530, pipeMouthY + 21);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Pipe Connection Target Highlight Box
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 4]);
+            ctx.strokeRect(490, pipeMouthY - 8, 30, 32);
+            ctx.setLineDash([]);
+
+            // Pipe Draining Animation (When water flows)
+            if (pipeWaterFlow > 0) {
+                ctx.fillStyle = 'rgba(56, 189, 248, 0.8)';
+                ctx.fillRect(495, pipeMouthY + 3, 305, 10);
+                generatePipeParticles();
+            }
+
+            // Draw Tank, Scale Beam & Weights
+            drawTankMechanism();
+
+            // Check Win / Spill Conditions when Tank is Lowered
+            if (weightsDropped && Math.abs(tankY - targetTankY) < 1.0) {
+                // Spilled Condition (Tilt Angle > Threshold)
+                if (Math.abs(tiltAngle) > 0.05 && !isSpilled) {
+                    isSpilled = true;
+                    waterLevel = 0;
+                    audio.playFail();
+                    audio.playSplash();
+                    generateWaterSplashParticles();
+                    setTimeout(() => {
+                        showStatusOverlay(false, "The tank tipped over and spilled the water! Try a different combination of weights.");
+                    }, 400);
+                } 
+                // Success Condition (Aligned with Pipe & Level)
+                else if (Math.abs(tiltAngle) <= 0.05 && Math.abs(tankY - idealPipeY) <= 3.0 && !isSuccess && !isSpilled) {
+                    isSuccess = true;
+                    pipeWaterFlow = 1.0;
+                    audio.playSuccess();
+                    setTimeout(() => {
+                        showStatusOverlay(true, "Great job! The outflow pipe aligned perfectly and the water was delivered.");
+                    }, 800);
+                }
+            }
+
+            // Height guidance text when dropped at wrong height (level/unspilled)
+            if (weightsDropped && Math.abs(tiltAngle) <= 0.05 && !isSpilled && !isSuccess && Math.abs(tankY - targetTankY) < 1.0) {
+                ctx.font = 'bold 13px Nunito';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = '#f59e0b';
+                if (tankY < idealPipeY - 3) {
+                    ctx.fillText("The tank is above the pipe opening! Select or adjust weights to lower it further.", 400, tankY + 70);
+                } else if (tankY > idealPipeY + 3) {
+                    ctx.fillText("The tank is below the pipe opening! Select or adjust weights to raise it.", 400, tankY + 70);
+                }
+            }
+
+            // Update & Render Water Particle System
+            updateAndDrawParticles();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        window.addEventListener('load', initGame);
+    </script>
+</body>
+</html>
